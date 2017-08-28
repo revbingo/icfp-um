@@ -1,4 +1,5 @@
 class FailException(message: String): RuntimeException(message)
+class Halt: RuntimeException()
 
 fun main(args: Array<String>) {
     print("Starting UniversalMachine")
@@ -11,24 +12,21 @@ fun main(args: Array<String>) {
 class UniversalMachine {
     val registers = Array(8, {0L})
 
-    val memory = mutableMapOf<Long, MutableList<Long>>();
-
-    var output = String()
+    val memory = mutableMapOf<Long, Array<Long>>();
 
     var executionFinger = 0
 
     fun init() {
-        val program = loadProgram(emptyList())
-        memory.put(0L, program)
+       loadProgram(emptyList())
     }
 
     fun start() {
         while(true) {
             val program = memory[0L] ?: failure("Program location 0L has been abandoned")
-            val platter = Platter(program.get(executionFinger))
-            processPlatter(platter)
-
+            val exit = processPlatter(program.get(executionFinger))
+            if(exit) break;
             executionFinger++
+            if(executionFinger > program.size - 1) break;
         }
     }
 
@@ -41,7 +39,8 @@ class UniversalMachine {
         memory.remove(address)
     }
 
-    fun processPlatter(platter: Platter) {
+    fun processPlatter(value: Long): Boolean {
+        val platter = Platter(value)
         val a = platter.reg_a
         val b = platter.reg_b
         val c = platter.reg_c
@@ -86,7 +85,8 @@ class UniversalMachine {
                   divided by the value in register C, if any, where
                   each quantity is treated treated as an unsigned 32
                   bit number. */
-
+                if(registers[c] == 0L) failure("Division by zero")
+                registers[a] = registers[b] / registers[c]
             }
             6 -> { /* Not-And.
 
@@ -95,13 +95,32 @@ class UniversalMachine {
                   position.  Otherwise the bit in register A receives
                   the 0 bit. */
 
-                registers[a] = (registers[b] and registers[c]).inv()
+                registers[a] = (registers[b] and registers[c]).inv() and 0x00000000FFFFFFFF
             }
+            7 -> { /* Halt.
+
+                  The universal machine stops computation. */
+                return true
+            }
+            8 -> { /* Allocation.
+
+                  A new array is created with a capacity of platters
+                  commensurate to the value in the register C. This
+                  new array is initialized entirely with platters
+                  holding the value 0. A bit pattern not consisting of
+                  exclusively the 0 bit, and that identifies no other
+                  active allocated array, is placed in the B register. */
+                val addr = registers[b]
+                if(addr == 0L) throw FailException("Attempt to allocate location 0")
+                memory[addr] = Array(registers[c].toInt(), {0L})
+            }
+            else -> throw FailException("Unimplemented operator ${platter.operator}")
         }
+        return false
     }
 
-    fun loadProgram(values: List<Long>): MutableList<Long> {
-        return values.toMutableList()
+    fun loadProgram(values: List<Long>) {
+        memory.put(0L, values.toTypedArray())
     }
 
     fun setRegister(reg: Int, value: Long) {
