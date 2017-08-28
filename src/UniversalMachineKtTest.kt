@@ -3,27 +3,28 @@ import org.hamcrest.CoreMatchers.*
 import org.junit.Assert.assertThat
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.File
 import kotlin.test.fail
 
 class UniversalMachineKtTest {
 
     @Test
     fun platterGivesCorrectOpCodeAndRegisters() {
-        var unit = Platter(instruction(5,1,4,7))
+        var unit = StandardPlatter(instruction(5,1,4,7))
 
         assertThat(unit.operator, equalTo(5))
         assertThat(unit.reg_a, equalTo(1))
         assertThat(unit.reg_b, equalTo(4))
         assertThat(unit.reg_c, equalTo(7))
 
-        unit = Platter(instruction(10,3,5,6))
+        unit = StandardPlatter(instruction(10,3,5,6))
 
         assertThat(unit.operator, equalTo(10))
         assertThat(unit.reg_a, equalTo(3))
         assertThat(unit.reg_b, equalTo(5))
         assertThat(unit.reg_c, equalTo(6))
 
-        unit = Platter(instruction(15,7,7,7))
+        unit = StandardPlatter(instruction(15,7,7,7))
 
         assertThat(unit.operator, equalTo(15))
         assertThat(unit.reg_a, equalTo(7))
@@ -245,6 +246,19 @@ class UniversalMachineKtTest {
     }
 
     @Test(expected = FailException::class)
+    fun allocation_cannot_reallocate_existing_memory() {
+        val unit = UniversalMachine()
+
+        unit.memory[100L] = arrayOf(1L,2L,3L)
+
+        unit.setRegister(1, 100L)
+        unit.setRegister(2, 5L)
+
+        unit.processPlatter(instruction(8, 0, 1, 2))
+
+    }
+
+    @Test(expected = FailException::class)
     fun allocation_fails_if_tries_to_allocate_location_zero() {
         val unit = UniversalMachine()
 
@@ -252,7 +266,6 @@ class UniversalMachineKtTest {
         unit.setRegister(2, 5L)
 
         unit.processPlatter(instruction(8, 0, 1, 2))
-
     }
 
     @Test
@@ -339,6 +352,39 @@ class UniversalMachineKtTest {
         unit.processPlatter(loadInstruction(0, 35267))
 
         assertThat(unit.registers[0], equalTo(35267L))
+    }
+
+    @Test
+    fun loader_correctly_interprets_input() {
+        val input = """0800 00d0 3000 00c0 d200 0014 d400 005b
+d600 0035 d000 000d c19a 9b70 0523 7000"""
+
+        val instructions = Loader.load(input.lines())
+
+        assertThat(instructions.size, equalTo(8))
+        assertThat(instructions[0], equalTo(0x080000d0L))
+        assertThat(instructions[1], equalTo(0x300000c0L))
+        assertThat(instructions[2], equalTo(0xd2000014L))
+        assertThat(instructions[3], equalTo(0xd400005bL))
+        assertThat(instructions[4], equalTo(0xd6000035L))
+        assertThat(instructions[5], equalTo(0xd000000dL))
+        assertThat(instructions[6], equalTo(0xc19a9b70L))
+        assertThat(instructions[7], equalTo(0x05237000L))
+    }
+
+    @Test
+    fun can_load_binary_file() {
+        val instructions = Loader.loadBinary(File("codex_small.umz"))
+
+        assertThat(instructions.size, equalTo(8))
+        assertThat(instructions[0], equalTo(0x080000d0L))
+        assertThat(instructions[1], equalTo(0x300000c0L))
+        assertThat(instructions[2], equalTo(0xd2000014L))
+        assertThat(instructions[3], equalTo(0xd400005bL))
+        assertThat(instructions[4], equalTo(0xd6000035L))
+        assertThat(instructions[5], equalTo(0xd000000dL))
+        assertThat(instructions[6], equalTo(0xc19a9b70L))
+        assertThat(instructions[7], equalTo(0x05237000L))
     }
 }
 

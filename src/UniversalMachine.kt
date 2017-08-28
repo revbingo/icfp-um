@@ -1,11 +1,16 @@
+
+import java.io.DataInputStream
+import java.io.File
+import java.io.FileInputStream
+
 class FailException(message: String): RuntimeException(message)
 class Halt: RuntimeException()
 
 fun main(args: Array<String>) {
-    print("Starting UniversalMachine")
+    println("Starting UniversalMachine")
 
     val um = UniversalMachine()
-    um.init()
+    um.init(File("sandmark.umz"))
     um.start()
 }
 
@@ -17,22 +22,29 @@ class UniversalMachine {
 
     var executionFinger = 0
 
-    fun init() {
-       loadProgram(emptyList())
+    fun init(file: File) {
+       loadProgram(Loader.loadBinary(file))
     }
 
     fun start() {
         while(true) {
             output = null
             val program = memory[0L] ?: failure("Program location 0L has been abandoned")
-            val exit = processPlatter(program.get(executionFinger))
+            printStatus()
+            val exit = processPlatter(program.get(executionFinger++))
             if(exit) break;
 
             if(output != null) print(output!!)
 
-            executionFinger++
             if(executionFinger > program.size - 1) break;
         }
+    }
+
+    fun printStatus() {
+        val inst = platterFor(memory[0L]!!.get(executionFinger))
+        System.err.println("""I:${inst}
+                0:${registers[0]} / 1:${registers[1]} / 2:${registers[2]} / 3:${registers[3]}
+                4:${registers[4]} / 5:${registers[5]} / 6:${registers[6]} / 7:${registers[7]}""".trimIndent())
     }
 
     fun failure(message: String): Nothing {
@@ -45,7 +57,7 @@ class UniversalMachine {
     }
 
     fun processPlatter(value: Long): Boolean {
-        val platter = Platter(value)
+        val platter = StandardPlatter(value)
         val a = platter.reg_a
         val b = platter.reg_b
         val c = platter.reg_c
@@ -117,6 +129,7 @@ class UniversalMachine {
                   active allocated array, is placed in the B register. */
                 val addr = registers[b]
                 if(addr == 0L) throw FailException("Attempt to allocate location 0")
+                if(memory.containsKey(addr)) failure("Attempt to reallocate existing platters ${addr}")
                 memory[addr] = Array(registers[c].toInt(), {0L})
             }
             9 -> { /*  Abandonment.
@@ -146,8 +159,8 @@ class UniversalMachine {
                   register C is endowed with a uniform value pattern
                   where every place is pregnant with the 1 bit. */
                 val inStream = System.`in`
-                val value = inStream.read()
-                registers[c] = value.toLong()
+                val input = inStream.read()
+                registers[c] = input.toLong()
             }
             12 -> { /* Load Program.
 
@@ -162,6 +175,7 @@ class UniversalMachine {
                   The '0' array shall be the most sublime choice for
                   loading, and shall be handled with the utmost
                   velocity. */
+                println("SWITCHING PROGRAM")
                 val addr = registers[b]
                 if(!memory.containsKey(addr)) failure("Attempt to load from non-existent location ${addr}")
                 memory.put(0L, memory[addr]!!.clone())
@@ -171,7 +185,7 @@ class UniversalMachine {
 
                   The value indicated is loaded into the register A
                   forthwith. */
-                val orth = OrthoPlatter(platter)
+                val orth = OrthoPlatter(value)
                 registers[orth.reg_a] = orth.value
 
             }
@@ -189,17 +203,66 @@ class UniversalMachine {
     }
 }
 
-fun Long.overflow() = this.rem(Math.pow(2.0,32.0).toLong())
+object Loader {
+    fun load(file: File): List<Long> {
+        val lines = file.readLines()
 
-data class Platter(var value: Long) {
-    val operator = (value ushr 28).toInt()
-    val reg_c = (value and 7).toInt()
-    val reg_b = ((value ushr 3) and 7).toInt()
-    val reg_a = ((value ushr 6) and 7).toInt()
+        return load(lines)
+    }
+
+    fun load(lines: List<String>): List<Long> {
+        val words = lines.flatMap { line ->
+            line.split(" ")
+        }
+
+        val instructions = mutableListOf<Long>()
+        for(i in (0..words.size - 2).step(2)) {
+            val value = java.lang.Long.parseUnsignedLong("${words[i]}${words[i+1]}", 16)
+            instructions.add(value)
+        }
+
+        return instructions
+    }
+
+    fun loadBinary(file: File): List<Long> {
+        val input = DataInputStream(FileInputStream(file))
+        val instructions = mutableListOf<Long>()
+
+        while(input.available() > 0) {
+            val highBytes = input.readUnsignedShort()
+            val lowBytes = input.readUnsignedShort()
+            val value = (highBytes.toLong() shl 16) or lowBytes.toLong()
+            instructions.add(value)
+        }
+        input.close()
+        return instructions
+    }
 }
 
-data class OrthoPlatter(val platter: Platter) {
-    val operator = 13
-    val reg_a = ((platter.value ushr 25) and 7).toInt()
-    val value = platter.value and 0x1FFFFFF
+fun Long.overflow() = this.rem(Math.pow(2.0,32.0).toLong())
+
+fun platterFor(value: Long): Platter = when((value ushr 28).toInt()) {
+    in 0..12 -> StandardPlatter(value)
+    else -> OrthoPlatter(value)
+}
+
+open class Platter(val input: Long) {
+    val operator = (input ushr 28).toInt()
+}
+
+class StandardPlatter(input: Long): Platter(input) {
+    val reg_c = (input and 7).toInt()
+    val reg_b = ((input ushr 3) and 7).toInt()
+    val reg_a = ((input ushr 6) and 7).toInt()
+    override fun toString(): String {
+        return "(${operator},${reg_a},${reg_b},${reg_c})"
+    }
+}
+class OrthoPlatter(input: Long): Platter(input) {
+    val reg_a = ((input ushr 25) and 7).toInt()
+    val value = input and 0x1FFFFFF
+
+    override fun toString(): String {
+        return "($operator,$reg_a,$value)"
+    }
 }
