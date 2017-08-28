@@ -2,6 +2,7 @@
 import org.hamcrest.CoreMatchers.*
 import org.junit.Assert.assertThat
 import org.junit.Test
+import java.io.ByteArrayInputStream
 import kotlin.test.fail
 
 class UniversalMachineKtTest {
@@ -255,7 +256,78 @@ class UniversalMachineKtTest {
     }
 
     @Test
-    fun abandonment_frees_up_memory() {
+    fun abandonment_frees_up_memory_addressed_by_C() {
+        val unit = UniversalMachine()
+
+        unit.memory[100L] = arrayOf(1L,2L,3L)
+
+        unit.setRegister(1, 100L)
+
+        unit.processPlatter(instruction(9, 0, 0, 1))
+
+        assertThat(unit.memory[100L], nullValue())
+    }
+
+    @Test(expected = FailException::class)
+    fun abandonment_fails_if_referencing_a_non_active_location() {
+        val unit = UniversalMachine()
+
+        unit.memory[100L] = arrayOf(1L,2L,3L)
+
+        unit.setRegister(1, 50L)
+
+        unit.processPlatter(instruction(9, 0, 0, 1))
+    }
+
+    @Test
+    fun output_sets_output_to_be_displayed() {
+        val unit = UniversalMachine()
+
+        unit.setRegister(7, 65)
+
+        unit.processPlatter(instruction(10, 0, 0, 7))
+
+        assertThat(unit.output, equalTo('A'))
+    }
+
+    @Test(expected = FailException::class)
+    fun output_fails_if_value_outside_ascii_range() {
+        val unit = UniversalMachine()
+
+        unit.setRegister(7, 256)
+
+        unit.processPlatter(instruction(10, 0, 0, 7))
+
+    }
+
+    @Test
+    fun input_loads_register_C_with_value() {
+        val unit = UniversalMachine()
+
+        val mockInputStream = ByteArrayInputStream(ByteArray(1,{65}))
+        System.setIn(mockInputStream)
+
+        unit.processPlatter(instruction(11, 0, 0, 1))
+
+        assertThat(unit.registers[1], equalTo(65L))
+    }
+
+    @Test
+    fun load_program_duplicates_array_to_location_zero_and_sets_execution_finger() {
+        val unit = UniversalMachine()
+
+        unit.setRegister(0, 0)
+        unit.setRegister(1, 3)
+        unit.setRegister(2, 1)
+        unit.setRegister(3, 100)
+        unit.setRegister(4, 1)
+
+        unit.memory[100L] = arrayOf(instruction(7, 0, 0, 0), instruction(3, 0, 1, 2))
+
+        unit.processPlatter(instruction(12, 0, 3, 4))
+
+        assertThat(unit.executionFinger, equalTo(1))
+        assertThat(unit.memory[0L]?.size, equalTo(2))
     }
 }
 

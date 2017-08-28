@@ -13,6 +13,7 @@ class UniversalMachine {
     val registers = Array(8, {0L})
 
     val memory = mutableMapOf<Long, Array<Long>>();
+    var output: Char? = null
 
     var executionFinger = 0
 
@@ -22,9 +23,13 @@ class UniversalMachine {
 
     fun start() {
         while(true) {
+            output = null
             val program = memory[0L] ?: failure("Program location 0L has been abandoned")
             val exit = processPlatter(program.get(executionFinger))
             if(exit) break;
+
+            if(output != null) print(output!!)
+
             executionFinger++
             if(executionFinger > program.size - 1) break;
         }
@@ -113,6 +118,54 @@ class UniversalMachine {
                 val addr = registers[b]
                 if(addr == 0L) throw FailException("Attempt to allocate location 0")
                 memory[addr] = Array(registers[c].toInt(), {0L})
+            }
+            9 -> { /*  Abandonment.
+
+                  The array identified by the register C is abandoned.
+                  Future allocations may then reuse that identifier. */
+                val addr = registers[c]
+                if(!memory.containsKey(addr)) failure("Attempt to abandon non-active location ${addr}")
+                memory.remove(addr)
+
+            }
+            10 -> { /* Output.
+
+                  The value in the register C is displayed on the console
+                  immediately. Only values between and including 0 and 255
+                  are allowed. */
+                if(!(registers[c] in 0..255)) failure("Attempt to display non-8bit character")
+                output = registers[c].toChar()
+
+            }
+            11 -> { /* Input.
+
+                  The universal machine waits for input on the console.
+                  When input arrives, the register C is loaded with the
+                  input, which must be between and including 0 and 255.
+                  If the end of input has been signaled, then the
+                  register C is endowed with a uniform value pattern
+                  where every place is pregnant with the 1 bit. */
+                val inStream = System.`in`
+                val value = inStream.read()
+                registers[c] = value.toLong()
+            }
+            12 -> { /* Load Program.
+
+                  The array identified by the B register is duplicated
+                  and the duplicate shall replace the '0' array,
+                  regardless of size. The execution finger is placed
+                  to indicate the platter of this array that is
+                  described by the offset given in C, where the value
+                  0 denotes the first platter, 1 the second, et
+                  cetera.
+
+                  The '0' array shall be the most sublime choice for
+                  loading, and shall be handled with the utmost
+                  velocity. */
+                val addr = registers[b]
+                if(!memory.containsKey(addr)) failure("Attempt to load from non-existent location ${addr}")
+                memory.put(0L, memory[addr]!!.clone())
+                executionFinger = registers[c].toInt()
             }
             else -> throw FailException("Unimplemented operator ${platter.operator}")
         }
