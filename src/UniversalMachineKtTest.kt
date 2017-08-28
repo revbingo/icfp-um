@@ -329,6 +329,17 @@ class UniversalMachineKtTest {
         assertThat(unit.executionFinger, equalTo(1))
         assertThat(unit.memory[0L]?.size, equalTo(2))
     }
+
+    @Test
+    fun orthography_loads_value_into_register() {
+        val unit = UniversalMachine()
+
+        unit.setRegister(0, 0)
+
+        unit.processPlatter(loadInstruction(0, 35267))
+
+        assertThat(unit.registers[0], equalTo(35267L))
+    }
 }
 
 fun instruction(opCode: Int, a: Int = 0, b: Int = 0, c: Int = 0 ): Long {
@@ -337,5 +348,13 @@ fun instruction(opCode: Int, a: Int = 0, b: Int = 0, c: Int = 0 ): Long {
     value = value xor (a.toLong() shl 6)
     value = value xor (b.toLong() shl 3)
     value = value xor (c.toLong())
+    return value
+}
+
+fun loadInstruction(register: Int, newValue: Long): Long {
+    var value = 13.toLong() shl 28
+
+    value = value xor (register.toLong() shl 25)
+    value = value xor (newValue)
     return value
 }

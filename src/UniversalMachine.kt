@@ -167,6 +167,14 @@ class UniversalMachine {
                 memory.put(0L, memory[addr]!!.clone())
                 executionFinger = registers[c].toInt()
             }
+            13 -> { /* Orthography.
+
+                  The value indicated is loaded into the register A
+                  forthwith. */
+                val orth = OrthoPlatter(platter)
+                registers[orth.reg_a] = orth.value
+
+            }
             else -> throw FailException("Unimplemented operator ${platter.operator}")
         }
         return false
@@ -188,4 +196,10 @@ data class Platter(var value: Long) {
     val reg_c = (value and 7).toInt()
     val reg_b = ((value ushr 3) and 7).toInt()
     val reg_a = ((value ushr 6) and 7).toInt()
+}
+
+data class OrthoPlatter(val platter: Platter) {
+    val operator = 13
+    val reg_a = ((platter.value ushr 25) and 7).toInt()
+    val value = platter.value and 0x1FFFFFF
 }
